@@ -10,7 +10,6 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 INSTALLED_APPS = [
     'playerstats.apps.PlayerstatsConfig',
-    'teamstats.apps.TeamstatsConfig',
     'rest_framework',
     'corsheaders',
     'django.contrib.admin',
