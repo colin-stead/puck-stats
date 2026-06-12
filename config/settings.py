@@ -12,6 +12,7 @@ INSTALLED_APPS = [
     'playerstats.apps.PlayerstatsConfig',
     'rest_framework',
     'corsheaders',
+    'django_crontab',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -64,6 +65,8 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
+APPEND_SLASH = False
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
@@ -79,4 +82,9 @@ REST_FRAMEWORK = {
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+]
+
+# Runs every Monday at 6am UTC
+CRONJOBS = [
+    ('0 6 * * 1', 'django.core.management.call_command', ['refresh_players']),
 ]
