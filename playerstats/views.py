@@ -11,7 +11,7 @@ WING_POSITIONS = ['LW', 'RW']
 @api_view(['GET'])
 def player_list(request):
     """
-    GET /api/players/
+    GET /api/players
     Query params:
       ?position=Wing|Center|Defenseman  (optional)
       ?limit=10  (optional, default 10)
@@ -34,7 +34,7 @@ def player_list(request):
 
 @api_view(['GET'])
 def player_detail(request, nhl_id):
-    """GET /api/players/<nhl_id>/"""
+    """GET /api/players/<nhl_id>"""
     try:
         player = Player.objects.prefetch_related('videos', 'weekly_snapshots').get(nhl_id=nhl_id)
     except Player.DoesNotExist:
