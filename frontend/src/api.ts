@@ -58,13 +58,14 @@ export type PositionFilter = 'All' | 'Center' | 'Wing' | 'Defenseman';
 export async function fetchPlayers(position?: PositionFilter): Promise<PlayerListItem[]> {
   const params = new URLSearchParams();
   if (position && position !== 'All') params.set('position', position);
-  const res = await fetch(`/api/players/?${params}`);
+  const query = params.toString();
+  const res = await fetch(`/api/players${query ? `?${query}` : ''}`);
   if (!res.ok) throw new Error(`Failed to fetch players: ${res.status}`);
   return res.json();
 }
 
 export async function fetchPlayer(nhlId: number): Promise<PlayerDetail> {
-  const res = await fetch(`/api/players/${nhlId}/`);
+  const res = await fetch(`/api/players/${nhlId}`);
   if (!res.ok) throw new Error(`Failed to fetch player ${nhlId}: ${res.status}`);
   return res.json();
 }
