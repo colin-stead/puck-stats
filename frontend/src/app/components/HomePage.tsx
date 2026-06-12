@@ -24,7 +24,7 @@ export function HomePage() {
       <div className="max-w-7xl mx-auto px-6 py-12">
         <header className="text-center mb-12">
           <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Top 10 NHL Skaters
+            Top 10 NHL Skaters By IQ
           </h1>
           <p className="text-xl text-gray-600">
             The definitive ranking of hockey's elite performers
