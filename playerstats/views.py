@@ -19,7 +19,7 @@ def player_list(request):
     position_filter = request.query_params.get('position')
     limit = int(request.query_params.get('limit', 10))
 
-    players = Player.objects.all()
+    players = Player.objects.prefetch_related('weekly_snapshots')
 
     if position_filter == 'Wing':
         players = players.filter(position__in=WING_POSITIONS)
