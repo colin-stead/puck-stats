@@ -39,8 +39,10 @@ class Player(models.Model):
     # Advanced stats (MoneyPuck)
     corsi_percentage = models.FloatField(default=0.0)
     xgoals_percentage = models.FloatField(default=0.0)
+    xgoals_against_per_60 = models.FloatField(default=0.0)
     zone_entry_success = models.FloatField(default=0.0)
     defensive_zone_exits = models.FloatField(default=0.0)
+    penalty_minutes = models.IntegerField(default=0)
 
     # AI-generated scouting report, refreshed weekly
     description = models.TextField(blank=True)
@@ -61,20 +63,24 @@ class Player(models.Model):
     def compute_iq_score(self):
         """
         TopShelfIQ Formula:
-          Points per 60          × 0.20
-          Primary Assists per 60 × 0.15
-          Corsi%                 × 0.20
-          xGoals%                × 0.15
-          Plus/Minus per 60      × 0.10
-          Defensive Zone Exits   × 0.10
-          Zone Entry Success%    × 0.10
+          Points per 60          × 0.20  (positive)
+          Primary Assists per 60 × 0.15  (positive)
+          Corsi%                 × 0.20  (positive)
+          xGoals%                × 0.15  (positive)
+          Plus/Minus per 60      × 0.10  (positive)
+          Defensive Zone Exits   × 0.10  (positive)
+          Zone Entry Success%    × 0.10  (positive)
+          Penalty Min per 60     × 0.15  (negative)
+          xGoals Against per 60  × 0.10  (negative)
         """
         toi = self.time_on_ice_per_game
+        penalty_minutes_per_60 = 0.0
         if toi > 0 and self.games > 0:
             total_hours = (toi / 60) * self.games
             self.points_per_60 = round(self.points / total_hours, 2)
             self.primary_assists_per_60 = round(self.primary_assists / total_hours, 2)
             self.plus_minus_per_60 = round(self.plus_minus / total_hours, 2)
+            penalty_minutes_per_60 = round(self.penalty_minutes / total_hours, 2)
 
         self.iq_score = round(
             (self.points_per_60 * 0.20) +
@@ -83,7 +89,9 @@ class Player(models.Model):
             (self.xgoals_percentage * 0.15) +
             (self.plus_minus_per_60 * 0.10) +
             (self.defensive_zone_exits * 0.10) +
-            (self.zone_entry_success * 0.10),
+            (self.zone_entry_success * 0.10) -
+            (penalty_minutes_per_60 * 0.15) -
+            (self.xgoals_against_per_60 * 0.10),
             2,
         )
         return self.iq_score
