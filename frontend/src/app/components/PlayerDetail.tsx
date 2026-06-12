@@ -109,14 +109,15 @@ export function PlayerDetail() {
           <div className="bg-white rounded-xl shadow-lg p-8">
             <h2 className="text-2xl font-bold mb-6">Season Statistics</h2>
             <div className="space-y-1">
+              <StatRow label="IQ Score" value={player.iq_score} />
               <StatRow label="Games Played" value={player.games} />
-              <StatRow label="Shots on Goal" value={player.shots_on_goal} />
-              <StatRow label="Shooting %" value={`${player.shooting_percentage}%`} />
               <StatRow label="Time on Ice / Game" value={toiFormatted} />
-              <StatRow label="Power Play Goals" value={player.power_play_goals} />
-              <StatRow label="Power Play Points" value={player.power_play_points} />
-              <StatRow label="Short Handed Goals" value={player.short_handed_goals} />
-              <StatRow label="Game Winning Goals" value={player.game_winning_goals} />
+              <StatRow label="Corsi%" value={player.corsi_percentage} />
+              <StatRow label="xGoals%" value={`${player.xgoals_percentage}%`} />
+              <StatRow label="Primary Assist Per 60" value={player.primary_assists_per_60} />
+              <StatRow label="Plus Minus Per 60" value={player.plus_minus_per_60} />
+              <StatRow label="Zone Entries %" value={player.zone_entry_success} />
+              <StatRow label="DZone Exits / 60" value={player.defensive_zone_exits} />
             </div>
           </div>
 
@@ -138,7 +139,7 @@ export function PlayerDetail() {
 
         {/* Advanced stats */}
         <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
-          <h2 className="text-2xl font-bold mb-6">Advanced Stats</h2>
+          <h2 className="text-2xl font-bold mb-6">Player Analysis/Clips</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <AdvancedStatCard label="TopShelfIQ Score" value={player.iq_score} subtitle="composite" />
             <AdvancedStatCard label="Corsi %" value={`${player.corsi_percentage}%`} subtitle="possession" />
@@ -160,20 +161,22 @@ export function PlayerDetail() {
                 <thead>
                   <tr className="border-b-2 border-gray-200">
                     <th className="py-2 px-3 text-left">Week</th>
-                    <th className="py-2 px-3 text-left">Season</th>
                     <th className="py-2 px-3 text-center">Rank</th>
+                    <th className="py-2 px-3 text-center">Goals</th>
+                    <th className="py-2 px-3 text-center">Assists</th>
                     <th className="py-2 px-3 text-center">Points</th>
-                    <th className="py-2 px-3 text-center">IQ Score</th>
+                    <th className="py-2 px-3 text-center">+/-</th>
                   </tr>
                 </thead>
                 <tbody>
                   {player.weekly_appearances.map((w) => (
-                    <tr key={`${w.season}-${w.week_number}`} className="border-b border-gray-100">
+                    <tr key={w.week_number} className="border-b border-gray-100">
                       <td className="py-2 px-3">{w.week_number}</td>
-                      <td className="py-2 px-3">{w.season}</td>
                       <td className="py-2 px-3 text-center font-semibold">#{w.ranking}</td>
+                      <td className="py-2 px-3 text-center">{w.goals}</td>
+                      <td className="py-2 px-3 text-center">{w.assists}</td>
                       <td className="py-2 px-3 text-center">{w.points}</td>
-                      <td className="py-2 px-3 text-center text-purple-600 font-semibold">{w.iq_score}</td>
+                      <td className="py-2 px-3 text-center">{w.plus_minus}</td>
                     </tr>
                   ))}
                 </tbody>
