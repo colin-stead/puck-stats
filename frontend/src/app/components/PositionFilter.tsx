@@ -18,7 +18,7 @@ export function PositionFilter({ selectedPosition, onPositionChange }: PositionF
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
           }`}
         >
-          {position === 'All' ? 'All Skaters' : `${position}s`}
+          {position === 'All' ? 'All Skaters' : (position === 'Defenseman' ? 'Defensemen' : `${position}s`)}
         </button>
       ))}
     </div>
