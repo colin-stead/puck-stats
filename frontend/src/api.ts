@@ -45,11 +45,12 @@ export interface PlayerDetail extends PlayerListItem {
   videos: { youtube_url: string; title: string; display_order: number }[];
   weekly_appearances: {
     week_number: number;
-    season: string;
-    start_date: string;
     ranking: number;
-    iq_score: number;
+    previous_ranking: number | null;
+    goals: number;
+    assists: number;
     points: number;
+    plus_minus: number;
   }[];
 }
 
