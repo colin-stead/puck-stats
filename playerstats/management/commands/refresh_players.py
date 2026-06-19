@@ -116,6 +116,13 @@ class Command(BaseCommand):
         agg["penalty_min_per_60"] = agg["penalty_minutes"] / hours
         agg["xgoals_against_per_60"] = agg["on_ice_a_xgoals"] / hours
 
+        # Elite TOI bonus: minutes above position threshold × 0.10
+        # Mirrors compute_iq_score() in the model.
+        avg_toi_min = agg["avg_toi_sec"] / 60
+        toi_threshold = agg["position"].map(lambda p: 23.0 if p == "D" else 21.0)
+        above = avg_toi_min >= toi_threshold
+        agg["toi_bonus"] = (2.0 + (avg_toi_min - toi_threshold) * 0.10).where(above, 0.0)
+
         # iq_score — mirrors compute_iq_score() in the model.
         # zone_entry_success and defensive_zone_exits omitted: not in this CSV.
         agg["iq_score"] = (
@@ -124,6 +131,7 @@ class Command(BaseCommand):
             + agg["corsi_pct"] * 0.20
             + agg["xgoals_pct"] * 0.15
             + agg["plus_minus_per_60"] * 0.10
+            + agg["toi_bonus"]
             - agg["penalty_min_per_60"] * 0.15
             - agg["xgoals_against_per_60"] * 0.10
         ).round(2)
