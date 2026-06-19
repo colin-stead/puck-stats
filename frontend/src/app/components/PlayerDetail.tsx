@@ -122,12 +122,12 @@ export function PlayerDetail() {
           {/* AI scouting report */}
           <div className="bg-white rounded-xl shadow-lg p-8">
             <h2 className="text-2xl font-bold mb-2">Skater Analysis</h2>
-            {player.latest_description ? (
+            {player.description ? (
               <>
                 <p className="text-xs text-gray-400 mb-4">
-                  IQ {player.latest_description.iq_score_at_time} · {player.latest_description.consecutive_weeks_at_time}w streak · updated {new Date(player.latest_description.created_at).toLocaleDateString()}
+                  IQ {player.iq_score} · {player.consecutive_weeks}w streak · updated {new Date(player.updated_at).toLocaleDateString()}
                 </p>
-                <p className="text-gray-700 leading-relaxed">{player.latest_description.description}</p>
+                <p className="text-gray-700 leading-relaxed">{player.description}</p>
               </>
             ) : (
               <p className="text-gray-400 italic">Analysis will be available after the first weekly refresh.</p>

@@ -15,31 +15,19 @@ export interface PlayerListItem {
   points: number;
   plus_minus: number;
   headshot_url: string;
-  latest_description: {
-    description: string;
-    current_rank: number;
-    previous_rank: number | null;
-    iq_score_at_time: number;
-    consecutive_weeks_at_time: number;
-    created_at: string;
-  } | null;
 }
 
 export interface PlayerDetail extends PlayerListItem {
   number: number;
   primary_assists: number;
   time_on_ice_per_game: number;
-  shots_on_goal: number;
-  shooting_percentage: number;
-  power_play_goals: number;
-  power_play_points: number;
-  short_handed_goals: number;
-  game_winning_goals: number;
   points_per_60: number;
   primary_assists_per_60: number;
   plus_minus_per_60: number;
   corsi_percentage: number;
   xgoals_percentage: number;
+  description: string;
+  updated_at: string;
   videos: { youtube_url: string; title: string; display_order: number }[];
   weekly_appearances: {
     week_number: number;

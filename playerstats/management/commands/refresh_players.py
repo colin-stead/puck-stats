@@ -1,11 +1,64 @@
 import io
 import zipfile
 
+import anthropic
 import pandas as pd
 import requests
 from django.core.management.base import BaseCommand
 
 from playerstats.models import Player
+
+SCOUTING_PROMPT = """\
+You are a hockey analyst for TopShelfIQ, a site that ranks NHL players by \
+a proprietary Hockey IQ metric. Write a scouting report explaining why \
+{player_name} ({position}, {team}, #{number}) is ranked #{current_rank} \
+this week.
+
+THE FORMULA:
+HockeyIQ Score =
+  (Points per 60 × 0.20) +
+  (Primary Assists per 60 × 0.15) +
+  (Corsi% × 0.20) +
+  (xGoals% × 0.15) +
+  (Plus/Minus per 60 × 0.10) +
+  (Blue Line Wins per 60 × 0.20)
+
+Blue Line Wins = successful zone entries + successful zone exits per 60 \
+minutes — a measure of how often a player wins the small, unglamorous \
+battles at the blue line that sustain possession and limit odd-man rushes.
+
+PLAYER'S RAW STATS THIS WEEK:
+- Points per 60: {points_per_60}
+- Primary Assists per 60: {primary_assists_per_60}
+- Corsi%: {corsi_percentage}
+- xGoals%: {xgoals_percentage}
+- Plus/Minus per 60: {plus_minus_per_60}
+- Blue Line Wins per 60: {blue_line_wins_per_60}
+- Final HockeyIQ Score: {iq_score}
+
+CONTEXT:
+- Previous rank: {previous_rank}
+- Rank change: {rank_change}
+- Consecutive weeks in top 10: {consecutive_weeks}
+- Returning after absence: {is_returning} ({weeks_absent} weeks gone)
+
+INSTRUCTIONS:
+Write exactly 2 paragraphs, no headers or bullet points:
+
+Paragraph 1: State their rank and the stat driving it most, with specific \
+numbers. Then explain what "Hockey IQ" means in their specific case — tie \
+their Blue Line Wins and Corsi% to in-game decision making, not just raw \
+talent. This is a player coaches want others to study, not just a good \
+scorer.
+
+Paragraph 2: Note one limiting factor holding them back from a higher \
+rank, and mention their rank trend (climbing, falling, returning, or \
+holding steady this week).
+
+Tone: confident, analytical, a notch above typical broadcast commentary. \
+Avoid clichés like "elite" or "dynamic." Write like someone who actually \
+watches tape, not a press release.\
+"""
 
 MONEYPUCK_URL = (
     "https://peter-tanner.com/moneypuck/downloads/seasonPlayersSummary/skaters/2025.zip"
@@ -151,6 +204,8 @@ class Command(BaseCommand):
         df = df.sort_values("iq_score", ascending=False).copy()
         df["ranking"] = range(1, len(df) + 1)
 
+        ai_client = anthropic.Anthropic()
+
         for _, row in df.iterrows():
             nhl_id = int(row["playerId"])
             toi_per_game = round(float(row["avg_toi_sec"]) / 60, 2)  # seconds → minutes
@@ -186,9 +241,62 @@ class Command(BaseCommand):
                     update_fields["number"] = number
                 if update_fields:
                     Player.objects.filter(nhl_id=nhl_id).update(**update_fields)
+                    player.refresh_from_db()
                     self.stdout.write(f"  Fetched NHL data for {row['name']}")
 
+            self._generate_description(ai_client, player)
+
         self.stdout.write(f"Upserted {len(df)} players.")
+
+    def _generate_description(self, ai_client, player):
+        snapshot = player.weekly_snapshots.first()
+        previous_rank = snapshot.previous_ranking if snapshot else None
+        consecutive_weeks = snapshot.consecutive_weeks if snapshot else 1
+
+        if previous_rank is None:
+            rank_change = "new entry"
+        elif player.ranking < previous_rank:
+            rank_change = f"up {previous_rank - player.ranking}"
+        elif player.ranking > previous_rank:
+            rank_change = f"down {player.ranking - previous_rank}"
+        else:
+            rank_change = "held steady"
+
+        snapshot_count = player.weekly_snapshots.count()
+        is_returning = previous_rank is None and snapshot_count > 1
+        weeks_absent = snapshot_count - 1 if is_returning else 0
+
+        prompt = SCOUTING_PROMPT.format(
+            player_name=player.name,
+            position=player.position,
+            team=player.team,
+            number=player.number or "?",
+            current_rank=player.ranking,
+            points_per_60=round(player.points_per_60, 2),
+            primary_assists_per_60=round(player.primary_assists_per_60, 2),
+            corsi_percentage=round(player.corsi_percentage, 1),
+            xgoals_percentage=round(player.xgoals_percentage, 1),
+            plus_minus_per_60=round(player.plus_minus_per_60, 2),
+            blue_line_wins_per_60=0.0,  # not yet available in source data
+            iq_score=player.iq_score,
+            previous_rank=previous_rank if previous_rank is not None else "N/A",
+            rank_change=rank_change,
+            consecutive_weeks=consecutive_weeks,
+            is_returning=str(is_returning).lower(),
+            weeks_absent=weeks_absent,
+        )
+
+        try:
+            response = ai_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=400,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            description = response.content[0].text.strip()
+            Player.objects.filter(pk=player.pk).update(description=description)
+            self.stdout.write(f"  Generated description for {player.name}")
+        except Exception as exc:
+            self.stdout.write(self.style.WARNING(f"  Description failed for {player.name}: {exc})"))
 
     # ------------------------------------------------------------------
     # NHL API
