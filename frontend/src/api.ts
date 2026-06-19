@@ -40,8 +40,6 @@ export interface PlayerDetail extends PlayerListItem {
   plus_minus_per_60: number;
   corsi_percentage: number;
   xgoals_percentage: number;
-  zone_entry_success: number;
-  defensive_zone_exits: number;
   videos: { youtube_url: string; title: string; display_order: number }[];
   weekly_appearances: {
     week_number: number;

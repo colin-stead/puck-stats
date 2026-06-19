@@ -65,7 +65,7 @@ class PlayerDetailSerializer(serializers.ModelSerializer):
             'games', 'goals', 'assists', 'primary_assists', 'points', 'plus_minus',
             'time_on_ice_per_game',
             'points_per_60', 'primary_assists_per_60', 'plus_minus_per_60',
-            'corsi_percentage', 'xgoals_percentage', 'zone_entry_success', 'defensive_zone_exits',
+            'corsi_percentage', 'xgoals_percentage',
             'headshot_url', 'description',
             'videos', 'weekly_appearances',
         ]

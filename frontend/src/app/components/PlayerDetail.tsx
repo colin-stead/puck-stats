@@ -116,8 +116,6 @@ export function PlayerDetail() {
               <StatRow label="xGoals%" value={`${player.xgoals_percentage}%`} />
               <StatRow label="Primary Assist Per 60" value={player.primary_assists_per_60} />
               <StatRow label="Plus Minus Per 60" value={player.plus_minus_per_60} />
-              <StatRow label="Zone Entries %" value={player.zone_entry_success} />
-              <StatRow label="DZone Exits / 60" value={player.defensive_zone_exits} />
             </div>
           </div>
 
@@ -147,8 +145,6 @@ export function PlayerDetail() {
             <AdvancedStatCard label="Points / 60" value={player.points_per_60} subtitle="per 60 min" />
             <AdvancedStatCard label="Prim. Assists / 60" value={player.primary_assists_per_60} subtitle="per 60 min" />
             <AdvancedStatCard label="+/- per 60" value={player.plus_minus_per_60} subtitle="per 60 min" />
-            <AdvancedStatCard label="Zone Entries %" value={`${player.zone_entry_success}%`} subtitle="controlled" />
-            <AdvancedStatCard label="DZ Exits / 60" value={player.defensive_zone_exits} subtitle="clean exits" />
           </div>
         </div>
 
