@@ -1,7 +1,8 @@
 import io
+import os
+import time
 import zipfile
 
-import anthropic
 import pandas as pd
 import requests
 from django.core.management.base import BaseCommand
@@ -204,8 +205,6 @@ class Command(BaseCommand):
         df = df.sort_values("iq_score", ascending=False).copy()
         df["ranking"] = range(1, len(df) + 1)
 
-        ai_client = anthropic.Anthropic()
-
         for _, row in df.iterrows():
             nhl_id = int(row["playerId"])
             toi_per_game = round(float(row["avg_toi_sec"]) / 60, 2)  # seconds → minutes
@@ -244,11 +243,11 @@ class Command(BaseCommand):
                     player.refresh_from_db()
                     self.stdout.write(f"  Fetched NHL data for {row['name']}")
 
-            self._generate_description(ai_client, player)
+            self._generate_description(player)
 
         self.stdout.write(f"Upserted {len(df)} players.")
 
-    def _generate_description(self, ai_client, player):
+    def _generate_description(self, player):
         snapshot = player.weekly_snapshots.first()
         previous_rank = snapshot.previous_ranking if snapshot else None
         consecutive_weeks = snapshot.consecutive_weeks if snapshot else 1
@@ -286,17 +285,40 @@ class Command(BaseCommand):
             weeks_absent=weeks_absent,
         )
 
-        try:
-            response = ai_client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=400,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            description = response.content[0].text.strip()
-            Player.objects.filter(pk=player.pk).update(description=description)
-            self.stdout.write(f"  Generated description for {player.name}")
-        except Exception as exc:
-            self.stdout.write(self.style.WARNING(f"  Description failed for {player.name}: {exc})"))
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+        if not api_key:
+            self.stdout.write(self.style.WARNING("  GEMINI_API_KEY not set — skipping description"))
+            return
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        delay = 5  # seconds between retries, doubles each attempt
+        for _ in range(3):
+            try:
+                resp = requests.post(
+                    url,
+                    params={"key": api_key},
+                    json={"contents": [{"parts": [{"text": prompt}]}]},
+                    timeout=60,
+                )
+                if resp.status_code == 429:
+                    try:
+                        api_msg = resp.json().get("error", {}).get("message", resp.text[:300])
+                    except Exception:
+                        api_msg = resp.text[:300]
+                    self.stdout.write(self.style.WARNING(f"  429: {api_msg}"))
+                    time.sleep(delay)
+                    delay *= 2
+                    continue
+                resp.raise_for_status()
+                description = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                Player.objects.filter(pk=player.pk).update(description=description)
+                self.stdout.write(f"  Generated description for {player.name}")
+                time.sleep(4)  # stay under 15 RPM free-tier limit
+                return
+            except Exception as exc:
+                self.stdout.write(self.style.WARNING(f"  Description failed for {player.name}: {exc}"))
+                return
 
     # ------------------------------------------------------------------
     # NHL API
