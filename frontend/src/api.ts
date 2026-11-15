@@ -6,6 +6,7 @@ export interface PlayerListItem {
   position: string;
   position_category: 'Center' | 'Wing' | 'Defenseman';
   ranking: number;
+  position_rank: number;
   previous_ranking: number | null;
   iq_score: number;
   consecutive_weeks: number;
@@ -29,15 +30,9 @@ export interface PlayerDetail extends PlayerListItem {
   description: string;
   updated_at: string;
   videos: { youtube_url: string; title: string; display_order: number }[];
-  weekly_appearances: {
-    week_number: number;
-    ranking: number;
-    previous_ranking: number | null;
-    goals: number;
-    assists: number;
-    points: number;
-    plus_minus: number;
-  }[];
+  // Season-total gains since the start of this week; null for a new entrant.
+  weekly: { goals: number; assists: number; points: number; plus_minus: number } | null;
+
 }
 
 export type PositionFilter = 'All' | 'Center' | 'Wing' | 'Defenseman';

@@ -1,68 +1,16 @@
 import io
 import os
-import time
 import zipfile
+from datetime import date
 
 import pandas as pd
 import requests
 from django.core.management.base import BaseCommand
 
-from playerstats.models import Player
-
-SCOUTING_PROMPT = """\
-You are a hockey analyst for TopShelfIQ, a site that ranks NHL players by \
-a proprietary Hockey IQ metric. Write a scouting report explaining why \
-{player_name} ({position}, {team}, #{number}) is ranked #{current_rank} \
-this week.
-
-THE FORMULA:
-HockeyIQ Score =
-  (Points per 60 × 0.20) +
-  (Primary Assists per 60 × 0.15) +
-  (Corsi% × 0.20) +
-  (xGoals% × 0.15) +
-  (Plus/Minus per 60 × 0.10) +
-  (Blue Line Wins per 60 × 0.20)
-
-Blue Line Wins = successful zone entries + successful zone exits per 60 \
-minutes — a measure of how often a player wins the small, unglamorous \
-battles at the blue line that sustain possession and limit odd-man rushes.
-
-PLAYER'S RAW STATS THIS WEEK:
-- Points per 60: {points_per_60}
-- Primary Assists per 60: {primary_assists_per_60}
-- Corsi%: {corsi_percentage}
-- xGoals%: {xgoals_percentage}
-- Plus/Minus per 60: {plus_minus_per_60}
-- Blue Line Wins per 60: {blue_line_wins_per_60}
-- Final HockeyIQ Score: {iq_score}
-
-CONTEXT:
-- Previous rank: {previous_rank}
-- Rank change: {rank_change}
-- Consecutive weeks in top 10: {consecutive_weeks}
-- Returning after absence: {is_returning} ({weeks_absent} weeks gone)
-
-INSTRUCTIONS:
-Write exactly 2 paragraphs, no headers or bullet points:
-
-Paragraph 1: State their rank and the stat driving it most, with specific \
-numbers. Then explain what "Hockey IQ" means in their specific case — tie \
-their Blue Line Wins and Corsi% to in-game decision making, not just raw \
-talent. This is a player coaches want others to study, not just a good \
-scorer.
-
-Paragraph 2: Note one limiting factor holding them back from a higher \
-rank, and mention their rank trend (climbing, falling, returning, or \
-holding steady this week).
-
-Tone: confident, analytical, a notch above typical broadcast commentary. \
-Avoid clichés like "elite" or "dynamic." Write like someone who actually \
-watches tape, not a press release.\
-"""
+from playerstats.models import Player, PlayerWeeklySnapshot
 
 MONEYPUCK_URL = (
-    "https://peter-tanner.com/moneypuck/downloads/seasonPlayersSummary/skaters/2025.zip"
+    "https://peter-tanner.com/moneypuck/downloads/seasonPlayersSummary/skaters/2026.zip"
 )
 NHL_API_URL = "https://api-web.nhle.com/v1/player/{}/landing"
 
@@ -204,9 +152,21 @@ class Command(BaseCommand):
     def _upsert_players(self, df):
         df = df.sort_values("iq_score", ascending=False).copy()
         df["ranking"] = range(1, len(df) + 1)
+        df["position_rank"] = df.groupby("group").cumcount() + 1
+
+        # Players who fell out of the top 30 are removed so the DB stays small and the
+        # list endpoint never shows stale rows. (Cascades to their snapshot and videos.)
+        dropped = Player.objects.exclude(nhl_id__in=[int(i) for i in df["playerId"]])
+        for name in dropped.values_list("name", flat=True):
+            self.stdout.write(f"  Dropped out of the top 30: {name}")
+        dropped.delete()
+
+        # Weeks are contiguous integers (Mon-Sun), so a gap of >1 means a missed refresh.
+        week = (date.today().toordinal() - 1) // 7
 
         for _, row in df.iterrows():
             nhl_id = int(row["playerId"])
+            previous = Player.objects.filter(nhl_id=nhl_id).first()
             toi_per_game = round(float(row["avg_toi_sec"]) / 60, 2)  # seconds → minutes
 
             player, created = Player.objects.update_or_create(
@@ -216,6 +176,7 @@ class Command(BaseCommand):
                     "position": row["mapped_position"],
                     "team": row["team"],
                     "ranking": int(row["ranking"]),
+                    "position_rank": int(row["position_rank"]),
                     "games": int(row["games_played"]),
                     "goals": int(row["goals"]),
                     "assists": int(row["assists"]),
@@ -227,6 +188,8 @@ class Command(BaseCommand):
                     "xgoals_percentage": float(row["xgoals_pct"]),
                     "xgoals_against_per_60": round(float(row["xgoals_against_per_60"]), 2),
                     "penalty_minutes": int(row["penalty_minutes"]),
+                    # Cleared so the detail view regenerates it lazily (see descriptions.py).
+                    "description": "",
                     # save() recomputes per-60s and iq_score from the raw fields above
                 },
             )
@@ -243,82 +206,46 @@ class Command(BaseCommand):
                     player.refresh_from_db()
                     self.stdout.write(f"  Fetched NHL data for {row['name']}")
 
-            self._generate_description(player)
+            self._update_snapshot(player, previous, week)
 
         self.stdout.write(f"Upserted {len(df)} players.")
 
-    def _generate_description(self, player):
-        snapshot = player.weekly_snapshots.first()
-        previous_rank = snapshot.previous_ranking if snapshot else None
-        consecutive_weeks = snapshot.consecutive_weeks if snapshot else 1
+    def _update_snapshot(self, player, previous, week):
+        """
+        Roll the player's single snapshot row forward. `previous` is the Player as it stood
+        before this refresh (None for a new entrant), so its ranking and season totals
+        are last refresh's values.
+        """
+        snapshot = PlayerWeeklySnapshot.objects.filter(player=player).first()
 
-        if previous_rank is None:
-            rank_change = "new entry"
-        elif player.ranking < previous_rank:
-            rank_change = f"up {previous_rank - player.ranking}"
-        elif player.ranking > previous_rank:
-            rank_change = f"down {player.ranking - previous_rank}"
-        else:
-            rank_change = "held steady"
+        if snapshot is not None and snapshot.week == week:
+            return snapshot  # re-run within the same week: leave the baselines alone
 
-        snapshot_count = player.weekly_snapshots.count()
-        is_returning = previous_rank is None and snapshot_count > 1
-        weeks_absent = snapshot_count - 1 if is_returning else 0
+        if snapshot is not None and previous is not None and week - snapshot.week == 1:
+            snapshot.consecutive_weeks += 1
+            snapshot.previous_ranking = previous.ranking
+            snapshot.start_goals = previous.goals
+            snapshot.start_assists = previous.assists
+            snapshot.start_points = previous.points
+            snapshot.start_plus_minus = previous.plus_minus
+            snapshot.week = week
+            snapshot.save()
+            return snapshot
 
-        prompt = SCOUTING_PROMPT.format(
-            player_name=player.name,
-            position=player.position,
-            team=player.team,
-            number=player.number or "?",
-            current_rank=player.ranking,
-            points_per_60=round(player.points_per_60, 2),
-            primary_assists_per_60=round(player.primary_assists_per_60, 2),
-            corsi_percentage=round(player.corsi_percentage, 1),
-            xgoals_percentage=round(player.xgoals_percentage, 1),
-            plus_minus_per_60=round(player.plus_minus_per_60, 2),
-            blue_line_wins_per_60=0.0,  # not yet available in source data
-            iq_score=player.iq_score,
-            previous_rank=previous_rank if previous_rank is not None else "N/A",
-            rank_change=rank_change,
-            consecutive_weeks=consecutive_weeks,
-            is_returning=str(is_returning).lower(),
-            weeks_absent=weeks_absent,
+        # New entrant, or a week was skipped: restart the streak with no baselines.
+        snapshot, _ = PlayerWeeklySnapshot.objects.update_or_create(
+            player=player,
+            defaults={
+                "week": week,
+                "consecutive_weeks": 1,
+                "previous_ranking": None,
+                "start_goals": None,
+                "start_assists": None,
+                "start_points": None,
+                "start_plus_minus": None,
+            },
         )
-
-        api_key = os.environ.get("GEMINI_API_KEY", "")
-        model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-        if not api_key:
-            self.stdout.write(self.style.WARNING("  GEMINI_API_KEY not set — skipping description"))
-            return
-
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        delay = 5  # seconds between retries, doubles each attempt
-        for _ in range(3):
-            try:
-                resp = requests.post(
-                    url,
-                    params={"key": api_key},
-                    json={"contents": [{"parts": [{"text": prompt}]}]},
-                    timeout=60,
-                )
-                if resp.status_code == 429:
-                    try:
-                        api_msg = resp.json().get("error", {}).get("message", resp.text[:300])
-                    except Exception:
-                        api_msg = resp.text[:300]
-                    self.stdout.write(self.style.WARNING(f"  429: {api_msg}"))
-                    time.sleep(delay)
-                    delay *= 2
-                    continue
-                resp.raise_for_status()
-                description = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-                Player.objects.filter(pk=player.pk).update(description=description)
-                self.stdout.write(f"  Generated description for {player.name}")
-                time.sleep(4)  # stay under 15 RPM free-tier limit
-                return
-            except Exception as exc:
-                self.stdout.write(self.style.WARNING(f"  Description failed for {player.name}: {exc}"))
-                return
+        return snapshot
 
     # ------------------------------------------------------------------
     # NHL API

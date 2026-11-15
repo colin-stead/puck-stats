@@ -8,6 +8,9 @@ import { fetchPlayers, type PositionFilter as PositionFilterType } from '@/api';
 export function HomePage() {
   const [positionFilter, setPositionFilter] = useState<PositionFilterType>('All');
   const [topVideoPlayers, setTopVideoPlayers] = useState<{ name: string; youtubeUrl?: string }[]>([]);
+  const currentYear = new Date().getFullYear();
+  const nextYearShort = String(currentYear + 1).slice(-2);
+  const seasonLabel = `${currentYear}-${nextYearShort}`;
 
   useEffect(() => {
     fetchPlayers('All')
@@ -34,7 +37,7 @@ export function HomePage() {
         <AlgorithmDescription />
 
         <div className="bg-white rounded-xl shadow-xl p-8 mb-8">
-          <h2 className="text-3xl font-bold mb-6">2025-26 Rankings</h2>
+          <h2 className="text-3xl font-bold mb-6">{seasonLabel} Rankings</h2>
           <PositionFilter
             selectedPosition={positionFilter}
             onPositionChange={setPositionFilter}

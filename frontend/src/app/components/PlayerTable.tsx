@@ -11,6 +11,7 @@ export function PlayerTable({ positionFilter }: PlayerTableProps) {
   const [players, setPlayers] = useState<PlayerListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isAll = positionFilter === 'All';
 
   useEffect(() => {
     setLoading(true);
@@ -46,6 +47,7 @@ export function PlayerTable({ positionFilter }: PlayerTableProps) {
             <th className="p-4 text-left">Skater</th>
             <th className="p-4 text-left">Team</th>
             <th className="p-4 text-center">Pos</th>
+            <th className="p-4 text-center">{isAll ? 'Pos Rank' : 'Ovr Rank'}</th>
             <th className="p-4 text-center">Streak</th>
             <th className="p-4 text-center">GP</th>
             <th className="p-4 text-center">G</th>
@@ -58,6 +60,17 @@ export function PlayerTable({ positionFilter }: PlayerTableProps) {
         <tbody>
           {players.map((player) => {
             const rankDelta = player.previous_ranking != null ? player.previous_ranking - player.ranking : null;
+            // previous_ranking is an overall rank, so the delta always sits with the overall number.
+            const overallRank = (
+              <div className={`flex items-center gap-1 ${isAll ? '' : 'justify-center'}`}>
+                <span className={isAll ? 'font-bold text-lg' : 'font-semibold text-gray-600'}>{player.ranking}</span>
+                {rankDelta !== null && (
+                  <span className={`text-xs font-semibold ${rankDelta > 0 ? 'text-green-600' : rankDelta < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                    {rankDelta > 0 ? `▲${rankDelta}` : rankDelta < 0 ? `▼${Math.abs(rankDelta)}` : '—'}
+                  </span>
+                )}
+              </div>
+            );
             return (
               <tr
                 key={player.id}
@@ -65,14 +78,7 @@ export function PlayerTable({ positionFilter }: PlayerTableProps) {
                 className="border-b border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors"
               >
                 <td className="p-4">
-                  <div className="flex items-center gap-1">
-                    <span className="font-bold text-lg">{player.ranking}</span>
-                    {rankDelta !== null && (
-                      <span className={`text-xs font-semibold ${rankDelta > 0 ? 'text-green-600' : rankDelta < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                        {rankDelta > 0 ? `▲${rankDelta}` : rankDelta < 0 ? `▼${Math.abs(rankDelta)}` : '—'}
-                      </span>
-                    )}
-                  </div>
+                  {isAll ? overallRank : <span className="font-bold text-lg">{player.position_rank}</span>}
                 </td>
                 <td className="p-4">
                   <div className="flex items-center gap-3">
@@ -89,6 +95,9 @@ export function PlayerTable({ positionFilter }: PlayerTableProps) {
                 </td>
                 <td className="p-4">{player.team}</td>
                 <td className="p-4 text-center">{player.position}</td>
+                <td className="p-4 text-center text-gray-600 font-semibold">
+                  {isAll ? player.position_rank : overallRank}
+                </td>
                 <td className="p-4 text-center">
                   <span className="text-sm text-gray-500" title="Consecutive weeks in top 10">
                     {player.consecutive_weeks > 0 ? `${player.consecutive_weeks}w` : '—'}

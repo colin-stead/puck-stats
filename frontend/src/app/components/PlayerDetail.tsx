@@ -87,7 +87,7 @@ export function PlayerDetail() {
                   </span>
                 )}
               </div>
-              <p className="text-xl text-gray-600 mb-1">{player.team} · {player.position}</p>
+              <p className="text-xl text-gray-600 mb-1">{player.team} · {player.position} · #{player.position_rank} {player.position_category === 'Wing' ? 'wing' : player.position_category.toLowerCase()}</p>
               {player.consecutive_weeks > 0 && (
                 <p className="text-sm text-blue-600 font-medium mb-4">
                   {player.consecutive_weeks} consecutive week{player.consecutive_weeks !== 1 ? 's' : ''} in top 10
@@ -127,7 +127,11 @@ export function PlayerDetail() {
                 <p className="text-xs text-gray-400 mb-4">
                   IQ {player.iq_score} · {player.consecutive_weeks}w streak · updated {new Date(player.updated_at).toLocaleDateString()}
                 </p>
-                <p className="text-gray-700 leading-relaxed">{player.description}</p>
+                <div className="space-y-3">
+                  {player.description.split(/\n\s*\n/).map((para, i) => (
+                    <p key={i} className="text-gray-700 leading-relaxed">{para.trim()}</p>
+                  ))}
+                </div>
               </>
             ) : (
               <p className="text-gray-400 italic">Analysis will be available after the first weekly refresh.</p>
@@ -148,35 +152,15 @@ export function PlayerDetail() {
           </div>
         </div>
 
-        {/* Weekly history */}
-        {player.weekly_appearances.length > 0 && (
+        {/* This week */}
+        {player.weekly && (
           <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
-            <h2 className="text-2xl font-bold mb-6">Weekly History</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b-2 border-gray-200">
-                    <th className="py-2 px-3 text-left">Week</th>
-                    <th className="py-2 px-3 text-center">Rank</th>
-                    <th className="py-2 px-3 text-center">Goals</th>
-                    <th className="py-2 px-3 text-center">Assists</th>
-                    <th className="py-2 px-3 text-center">Points</th>
-                    <th className="py-2 px-3 text-center">+/-</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {player.weekly_appearances.map((w) => (
-                    <tr key={w.week_number} className="border-b border-gray-100">
-                      <td className="py-2 px-3">{w.week_number}</td>
-                      <td className="py-2 px-3 text-center font-semibold">#{w.ranking}</td>
-                      <td className="py-2 px-3 text-center">{w.goals}</td>
-                      <td className="py-2 px-3 text-center">{w.assists}</td>
-                      <td className="py-2 px-3 text-center">{w.points}</td>
-                      <td className="py-2 px-3 text-center">{w.plus_minus}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <h2 className="text-2xl font-bold mb-6">This Week</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <StatCard label="Points" value={player.weekly.points} color="blue" />
+              <StatCard label="Goals" value={player.weekly.goals} color="green" />
+              <StatCard label="Assists" value={player.weekly.assists} color="purple" />
+              <StatCard label="+/-" value={player.weekly.plus_minus > 0 ? `+${player.weekly.plus_minus}` : player.weekly.plus_minus} color={player.weekly.plus_minus >= 0 ? 'green' : 'red'} />
             </div>
           </div>
         )}

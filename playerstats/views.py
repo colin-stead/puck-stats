@@ -2,6 +2,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 
+from .descriptions import ensure_description
 from .models import Player
 from .serializers import PlayerListSerializer, PlayerDetailSerializer
 
@@ -19,7 +20,7 @@ def player_list(request):
     position_filter = request.query_params.get('position')
     limit = int(request.query_params.get('limit', 10))
 
-    players = Player.objects.prefetch_related('weekly_snapshots')
+    players = Player.objects.select_related('snapshot')
 
     if position_filter == 'Wing':
         players = players.filter(position__in=WING_POSITIONS)
@@ -36,8 +37,9 @@ def player_list(request):
 def player_detail(request, nhl_id):
     """GET /api/players/<nhl_id>"""
     try:
-        player = Player.objects.prefetch_related('videos', 'weekly_snapshots').get(nhl_id=nhl_id)
+        player = Player.objects.select_related('snapshot').prefetch_related('videos').get(nhl_id=nhl_id)
     except Player.DoesNotExist:
         return Response({'detail': 'Player not found.'}, status=status.HTTP_404_NOT_FOUND)
 
+    ensure_description(player)  # generates + caches on first view after a weekly refresh
     return Response(PlayerDetailSerializer(player).data)

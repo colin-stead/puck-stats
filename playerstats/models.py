@@ -19,7 +19,8 @@ class Player(models.Model):
     headshot_url = models.CharField(max_length=500, blank=True)
 
     # Current ranking
-    ranking = models.IntegerField()
+    ranking = models.IntegerField()  # overall, 1-30
+    position_rank = models.IntegerField(default=0)  # within C / W / D, 1-10
     iq_score = models.FloatField(default=0.0)
 
     # Current season stats (NHL API)
@@ -102,25 +103,23 @@ class Player(models.Model):
 
 
 class PlayerWeeklySnapshot(models.Model):
-    """One row per player per weekly refresh. Tracks ranking history and streak visibility."""
-    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='weekly_snapshots')
-    week = models.IntegerField()
+    """
+    One row per player, overwritten in place each new week (no history is kept, to keep
+    the DB tiny). Holds last week's rank, the streak, and the season totals as they stood
+    at the start of the current week; weekly stats = Player totals - these baselines.
+    Baselines are null for a player who entered the rankings this week.
+    """
+    player = models.OneToOneField(Player, on_delete=models.CASCADE, related_name='snapshot')
+    week = models.IntegerField()  # (date.toordinal() - 1) // 7, so consecutive weeks differ by 1
     consecutive_weeks = models.IntegerField(default=1)
-    current_ranking = models.IntegerField()
     previous_ranking = models.IntegerField(null=True, blank=True)
-    goals = models.IntegerField(default=0)
-    assists = models.IntegerField(default=0)
-    points = models.IntegerField(default=0)
-    plus_minus = models.IntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = ['player', 'week']
-        ordering = ['-week']
+    start_goals = models.IntegerField(null=True, blank=True)
+    start_assists = models.IntegerField(null=True, blank=True)
+    start_points = models.IntegerField(null=True, blank=True)
+    start_plus_minus = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
-        return f"{self.player.name} — Week {self.week} #{self.current_ranking}"
+        return f"{self.player.name} — week {self.week}, {self.consecutive_weeks} straight"
 
 
 class PlayerVideo(models.Model):
