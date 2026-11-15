@@ -12,7 +12,6 @@ INSTALLED_APPS = [
     'playerstats.apps.PlayerstatsConfig',
     'rest_framework',
     'corsheaders',
-    'django_crontab',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -84,7 +83,19 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:5173',
 ]
 
-# Runs every Monday at 6am UTC
-CRONJOBS = [
-    ('0 6 * * 1', 'django.core.management.call_command', ['refresh_players']),
-]
+# --- Celery ---------------------------------------------------------------
+# The filesystem broker needs no extra service; messages are small files in
+# BROKER_DIR. No result backend, so nothing accumulates over time.
+BROKER_DIR = BASE_DIR / '.celery_broker'
+(BROKER_DIR / 'control').mkdir(parents=True, exist_ok=True)
+
+CELERY_BROKER_URL = 'filesystem://'
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'data_folder_in': str(BROKER_DIR),
+    'data_folder_out': str(BROKER_DIR),
+    'control_folder': str(BROKER_DIR / 'control'),
+}
+CELERY_BEAT_SCHEDULE_FILENAME = str(BROKER_DIR / 'celerybeat-schedule')
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True

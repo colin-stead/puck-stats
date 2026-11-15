@@ -224,3 +224,5 @@ media/
 # General
 .DS_Store
 .vscode/
+# Celery filesystem broker
+.celery_broker/

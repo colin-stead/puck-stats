@@ -23,7 +23,7 @@ python manage.py refresh_players                # pull MoneyPuck data, upsert to
 python manage.py refresh_players --inspect      # print the CSV columns and a sample row; writes nothing
 python manage.py test playerstats               # tests.py is currently empty
 python manage.py test playerstats.tests.SomeTestCase.test_method
-python manage.py crontab add                    # install the weekly refresh cron (Mon 06:00 UTC, via django-crontab)
+celery -A config worker -B -l info              # worker + embedded beat; runs refresh_players Mon 06:00 UTC (keep running)
 ```
 
 Frontend (from `frontend/`):
@@ -34,9 +34,13 @@ npm run build
 ```
 There is no lint or typecheck script on either side.
 
+## Scheduling
+
+The weekly refresh runs on Celery ([config/celery.py](config/celery.py) holds the beat schedule and [playerstats/tasks.py](playerstats/tasks.py) the task, which just calls `refresh_players`). The broker is kombu's filesystem transport (`.celery_broker/`, gitignored), so no Redis or other service is needed. There is no result backend, to avoid growth. Beat is embedded in the worker (`-B`), so run exactly one worker process or the job will fire more than once.
+
 ## Environment
 
-`manage.py` loads `.env` through `load_dotenv()`. `wsgi.py` and `asgi.py` don't, so env vars set only in `.env` are visible to management commands and `runserver`, not to WSGI deployments. Variables used:
+`manage.py` and `config/celery.py` load `.env` through `load_dotenv()`. `wsgi.py` and `asgi.py` don't, so env vars set only in `.env` are visible to management commands and `runserver`, not to WSGI deployments. Variables used:
 - `GEMINI_API_KEY` (sent as the `x-goog-api-key` header): if unset, description generation is skipped with a warning.
 - `GEMINI_MODEL`: defaults to `gemini-2.0-flash`.
 
