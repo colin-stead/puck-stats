@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Overview
 
 TopShelfIQ / puck-stats ranks NHL skaters by a custom "Hockey IQ" score. There are two parts:
-- **Backend**: Django + DRF at the repo root (`config/` is the project, `playerstats/` is the only app). It uses SQLite (`db.sqlite3`, gitignored).
+- **Backend**: Django + DRF at the repo root (`config/` is the project, `api/` is the only app). It uses SQLite (`db.sqlite3`, gitignored).
 - **Frontend**: Vite + React 18 + Tailwind v4 in `frontend/`. It was exported from Figma Make, so `frontend/src/app/components/ui/` is generated shadcn/Radix boilerplate.
 
 ## Project goals
@@ -21,8 +21,8 @@ python manage.py migrate
 python manage.py runserver                      # serves on :8000
 python manage.py refresh_players                # pull MoneyPuck data, upsert top players, generate descriptions
 python manage.py refresh_players --inspect      # print the CSV columns and a sample row; writes nothing
-python manage.py test playerstats               # tests.py is currently empty
-python manage.py test playerstats.tests.SomeTestCase.test_method
+python manage.py test api               # tests.py is currently empty
+python manage.py test api.tests.SomeTestCase.test_method
 celery -A config worker -B -l info              # worker + embedded beat; runs refresh_players Mon 06:00 UTC (keep running)
 ```
 
@@ -36,7 +36,7 @@ There is no lint or typecheck script on either side.
 
 ## Scheduling
 
-The weekly refresh runs on Celery ([config/celery.py](config/celery.py) holds the beat schedule and [playerstats/tasks.py](playerstats/tasks.py) the task, which just calls `refresh_players`). The broker is kombu's filesystem transport (`.celery_broker/`, gitignored), so no Redis or other service is needed. There is no result backend, to avoid growth. Beat is embedded in the worker (`-B`), so run exactly one worker process or the job will fire more than once.
+The weekly refresh runs on Celery ([config/celery.py](config/celery.py) holds the beat schedule and [api/tasks.py](api/tasks.py) the task, which just calls `refresh_players`). The broker is kombu's filesystem transport (`.celery_broker/`, gitignored), so no Redis or other service is needed. There is no result backend, to avoid growth. Beat is embedded in the worker (`-B`), so run exactly one worker process or the job will fire more than once.
 
 ## Environment
 
@@ -46,7 +46,7 @@ The weekly refresh runs on Celery ([config/celery.py](config/celery.py) holds th
 
 ## Architecture
 
-**Data pipeline** ([refresh_players.py](playerstats/management/commands/refresh_players.py)):
+**Data pipeline** ([refresh_players.py](api/management/commands/refresh_players.py)):
 1. Download the MoneyPuck season skater zip (the season is hardcoded in `MONEYPUCK_URL`). The CSV has one row per player per game per situation. Keep only `situation == "all"` and aggregate to season totals per `playerId`. Corsi% and xGoals% are recomputed from summed totals, not averaged.
 2. Filter to players averaging at least 10 min TOI. Once anyone has played 10+ games, also require 10+ games played.
 3. Compute `iq_score` in pandas and take the top 10 in each group: C, W (MoneyPuck `L`/`R` → model `LW`/`RW`), and D. Rank the combined 30 by score (1–30).
@@ -54,7 +54,7 @@ The weekly refresh runs on Celery ([config/celery.py](config/celery.py) holds th
 5. Call Gemini with `SCOUTING_PROMPT` for each player to write `description`. A 4s sleep between calls keeps it under the free-tier rate limit.
 
 **The IQ formula exists in two places and they must stay in sync**:
-- `Player.compute_iq_score()` in [models.py](playerstats/models.py) runs on every `save()` and recomputes the per-60 fields and `iq_score` from raw totals.
+- `Player.compute_iq_score()` in [models.py](api/models.py) runs on every `save()` and recomputes the per-60 fields and `iq_score` from raw totals.
 - The vectorized copy in `_select_top_players()` is used to pick who gets stored.
 
 Two places describe the formula in text and are currently out of date:
@@ -72,7 +72,7 @@ When the formula changes, update all four.
 
 `PlayerVideo` rows (YouTube links on the detail page) are entered by hand, e.g. through the admin.
 
-**API** ([views.py](playerstats/views.py)). `APPEND_SLASH = False`, and the URLs have no trailing slash. The app routes are mounted at `api/players` and the detail route is `'/<int:nhl_id>'`, which builds the paths below:
+**API** ([views.py](api/views.py)). `APPEND_SLASH = False`, and the URLs have no trailing slash. The app routes are mounted at `api/players` and the detail route is `'/<int:nhl_id>'`, which builds the paths below:
 - `GET /api/players?position=Wing|Center|Defenseman&limit=10` → `PlayerListSerializer`. `Wing` maps to `position__in=['LW','RW']`.
 - `GET /api/players/<nhl_id>` → `PlayerDetailSerializer` (adds videos and `weekly`).
 

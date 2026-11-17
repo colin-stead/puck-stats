@@ -9,7 +9,7 @@ DEBUG = True
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 INSTALLED_APPS = [
-    'playerstats.apps.PlayerstatsConfig',
+    'api.apps.PlayerstatsConfig',
     'rest_framework',
     'corsheaders',
     'django.contrib.admin',
